@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>База данных</title>
+
+  <!-- Firebase SDK (compat версия — проще для использования) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d2e;
+      --surface2: #252840;
+      --accent: #4f8ef7;
+      --accent2: #7c3aed;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --text: #e8eaf6;
+      --text2: #8b93b8;
+      --border: #2e3254;
+      --radius: 12px;
+      --font: 'Segoe UI', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      font-size: 15px;
+    }
+
+    /* ======= LOGIN ======= */
+    #loginScreen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 28px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .login-logo {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .login-logo .icon {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      margin-bottom: 12px;
+    }
+
+    .login-logo h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .login-logo p {
+      font-size: 13px;
+      color: var(--text2);
+      margin-top: 4px;
+    }
+
+    /* ======= INPUTS ======= */
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .field input, .field select, .field textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 15px;
+      font-family: var(--font);
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+
+    .field input:focus, .field select:focus, .field textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .field textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* ======= BUTTONS ======= */
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      font-family: var(--font);
+    }
+
+    .btn:active { transform: scale(0.98); opacity: 0.9; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .btn-ghost {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-sm {
+      width: auto;
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    /* ======= TABS ======= */
+    #app { display: none; flex-direction: column; min-height: 100vh; }
+
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .topbar h2 { font-size: 17px; font-weight: 700; }
+    .topbar .user-info { font-size: 12px; color: var(--text2); }
+
+    .tab-bar {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 53px;
+      z-index: 9;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 13px 4px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text2);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-icon { font-size: 18px; display: block; margin-bottom: 2px; }
+
+    /* ======= SECTIONS ======= */
+    .section { display: none; padding: 16px; padding-bottom: 32px; }
+    .section.active { display: block; }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ======= FORM GROUPS ======= */
+    .group-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin: 20px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ======= SEARCH ======= */
+    .search-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .search-box input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 15px;
+      font-family: var(--font);
+      outline: none;
+    }
+
+    .search-box input:focus { border-color: var(--accent); }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .filter-chip {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text2);
+      transition: all 0.2s;
+    }
+
+    .filter-chip.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* ======= CARDS ======= */
+    .results-count {
+      font-size: 13px;
+      color: var(--text2);
+      margin-bottom: 12px;
+    }
+
+    .record-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.1s;
+    }
+
+    .record-card:active { transform: scale(0.99); }
+    .record-card:hover { border-color: var(--accent); }
+
+    .record-card .name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .record-card .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--surface2);
+      color: var(--text2);
+    }
+
+    .tag.blue { background: rgba(79,142,247,0.15); color: var(--accent); }
+    .tag.purple { background: rgba(124,58,237,0.15); color: #a78bfa; }
+    .tag.green { background: rgba(34,197,94,0.15); color: var(--success); }
+
+    /* ======= DETAIL MODAL ======= */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      overflow-y: auto;
+    }
+
+    .modal-overlay.open { display: block; }
+
+    .modal {
+      background: var(--surface);
+      border-radius: 20px 20px 0 0;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 20px 16px 32px;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+
+    .modal-name {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .detail-section {
+      margin-top: 20px;
+    }
+
+    .detail-section .group-label {
+      margin-top: 0;
+    }
+
+    .detail-row {
+      display: flex;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .detail-row:last-child { border-bottom: none; }
+
+    .detail-key {
+      font-size: 12px;
+      color: var(--text2);
+      min-width: 130px;
+      flex-shrink: 0;
+    }
+
+    .detail-val {
+      font-size: 14px;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    /* ======= TOAST ======= */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 200;
+      transition: transform 0.3s ease;
+      white-space: nowrap;
+    }
+
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.error { border-color: var(--danger); color: var(--danger); }
+
+    /* ======= LOADING ======= */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: var(--text2);
+      font-size: 14px;
+      gap: 10px;
+    }
+
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 16px;
+      color: var(--text2);
+    }
+
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 15px; }
+
+    /* ======= ERROR ======= */
+    .error-msg {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid var(--danger);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #fca5a5;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .error-msg.show { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- ==================== LOGIN ==================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="icon">🗂️</div>
+      <h1>База данных</h1>
+      <p>Войдите для доступа к системе</p>
+    </div>
+
+    <div id="loginError" class="error-msg"></div>
+
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="admin@example.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Пароль</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()" style="margin-top:8px">Войти</button>
+  </div>
+</div>
+
+<!-- ==================== APP ==================== -->
+<div id="app">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <h2>🗂️ База данных</h2>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="user-info" id="userEmail"></span>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Выйти</button>
+    </div>
+  </div>
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('add')">
+      <span class="tab-icon">➕</span>Добавить
+    </div>
+    <div class="tab" onclick="switchTab('search')">
+      <span class="tab-icon">🔍</span>Поиск
+    </div>
+    <div class="tab" onclick="switchTab('list')">
+      <span class="tab-icon">📋</span>Все записи
+    </div>
+  </div>
+
+  <!-- ===== TAB: ADD ===== -->
+  <div class="section active" id="tab-add">
+    <div class="section-title">➕ Новая запись</div>
+
+    <div class="group-label">👤 Личные данные</div>
+
+    <div class="field"><label>Фамилия *</label><input type="text" id="f_lastName" placeholder="Иванов"></div>
+    <div class="row-2">
+      <div class="field"><label>Имя *</label><input type="text" id="f_firstName" placeholder="Иван"></div>
+      <div class="field"><label>Отчество</label><input type="text" id="f_midName" placeholder="Иванович"></div>
+    </div>
+    <div class="row-2">
+      <div class="field"><label>Дата рождения</label><input type="date" id="f_dob"></div>
+      <div class="field"><label>Возраст</label><input type="number" id="f_age" placeholder="35" min="0" max="120"></div>
+    </div>
+    <div class="field"><label>Место рождения</label><input type="text" id="f_birthplace" placeholder="г. Москва"></div>
+
+    <div class="group-label">🏠 Адреса</div>
+    <div class="field"><label>Адрес проживания</label><input type="text" id="f_addressLive" placeholder="ул. Ленина, д. 1, кв. 5"></div>
+    <div class="field"><label>Адрес прописки</label><input type="text" id="f_addressReg" placeholder="ул. Пушкина, д. 10"></div>
+
+    <div class="group-label">📄 Документы</div>
+    <div class="row-2">
+      <div class="field"><label>Серия паспорта</label><input type="text" id="f_passportSeries" placeholder="4512" maxlength="10"></div>
+      <div class="field"><label>Номер паспорта</label><input type="text" id="f_passportNumber" placeholder="123456" maxlength="10"></div>
+    </div>
+
+    <div class="group-label">🚔 Задержание</div>
+    <div class="row-2">
+      <div class="field"><label>Дата задержания</label><input type="date" id="f_detentionDate"></div>
+      <div class="field"><label>Время</label><input type="time" id="f_detentionTime"></div>
+    </div>
+    <div class="field"><label>Место задержания</label><input type="text" id="f_detentionPlace" placeholder="ул. Садовая, д. 3"></div>
+
+    <div class="group-label">🧍 Внешность</div>
+    <div class="row-2">
+      <div class="field"><label>Рост (см)</label><input type="number" id="f_height" placeholder="178" min="100" max="250"></div>
+      <div class="field">
+        <label>Телосложение</label>
+        <select id="f_build">
+          <option value="">— выбрать —</option>
+          <option>Худощавое</option>
+          <option>Среднее</option>
+          <option>Плотное</option>
+          <option>Коренастое</option>
+          <option>Полное</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Внешность (общее описание)</label><textarea id="f_appearance" placeholder="Описание лица, волос, цвета глаз..."></textarea></div>
+    <div class="field"><label>Одежда</label><textarea id="f_clothes" placeholder="Синяя куртка, чёрные джинсы..."></textarea></div>
+    <div class="field"><label>Особые приметы</label><textarea id="f_marks" placeholder="Татуировки, шрамы, родимые пятна..."></textarea></div>
+
+    <button class="btn btn-primary" onclick="saveRecord()" style="margin-top:8px">💾 Сохранить запись</button>
+  </div>
+
+  <!-- ===== TAB: SEARCH ===== -->
+  <div class="section" id="tab-search">
+    <div class="section-title">🔍 Поиск</div>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Поиск по ФИО, паспорту, месту...">
+      <button class="btn btn-primary btn-sm" onclick="doSearch()" style="width:auto;padding:12px 18px">🔍</button>
+    </div>
+
+    <div class="filter-row">
+      <div class="filter-chip active" onclick="setFilter('all', this)">Везде</div>
+      <div class="filter-chip" onclick="setFilter('name', this)">ФИО</div>
+      <div class="filter-chip" onclick="setFilter('passport', this)">Паспорт</div>
+      <div class="filter-chip" onclick="setFilter('detention', this)">Задержание</div>
+      <div class="filter-chip" onclick="setFilter('address', this)">Адрес</div>
+    </div>
+
+    <div id="searchResults"></div>
+  </div>
+
+  <!-- ===== TAB: LIST ===== -->
+  <div class="section" id="tab-list">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="section-title" style="margin:0">📋 Все записи</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄 Обновить</button>
+    </div>
+    <div id="allRecords"></div>
+  </div>
+
+</div><!-- end #app -->
+
+<!-- ==================== DETAIL MODAL ==================== -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal" id="modalContent">
+    <div class="modal-handle"></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// =============================================
+// ⚙️  ЗАМЕНИТЕ НА ВАШИ ДАННЫЕ ИЗ FIREBASE
+// =============================================
+const firebaseConfig = {
+  apiKey:            "AIzaSyCEuooTRUnlMklsfRaGW-UVHf53jV5OO1s",
+  authDomain:        "nebulo-d1c00.firebaseapp.com",
+  projectId:         "nebulo-d1c00",
+  storageBucket:     "nebulo-d1c00.firebasestorage.app",
+  messagingSenderId: "788159983951",
+  appId:             "1:788159983951:web:7e922aa6e00dfe31d5553a"
+};
+// =============================================
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+let currentFilter = 'all';
+let allRecordsCache = [];
+
+// ===== AUTH =====
+auth.onAuthStateChanged(user => {
+  if (user) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('userEmail').textContent = user.email;
+    loadAll();
+  } else {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.classList.remove('show');
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch(e) {
+    let msg = 'Ошибка входа';
+    if (e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') msg = 'Неверный email или пароль';
+    if (e.code === 'auth/too-many-requests') msg = 'Слишком много попыток. Попробуйте позже';
+    errEl.textContent = msg;
+    errEl.classList.add('show');
+  }
+}
+
+async function doLogout() {
+  await auth.signOut();
+}
+
+// ===== TABS =====
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  const tabs = ['add','search','list'];
+  document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'list') loadAll();
+}
+
+// ===== SAVE RECORD =====
+async function saveRecord() {
+  const lastName  = document.getElementById('f_lastName').value.trim();
+  const firstName = document.getElementById('f_firstName').value.trim();
+  if (!lastName || !firstName) { showToast('Фамилия и Имя обязательны', 'error'); return; }
+
+  const rec = {
+    lastName:        lastName,
+    firstName:       firstName,
+    midName:         document.getElementById('f_midName').value.trim(),
+    dob:             document.getElementById('f_dob').value,
+    age:             document.getElementById('f_age').value,
+    birthplace:      document.getElementById('f_birthplace').value.trim(),
+    addressLive:     document.getElementById('f_addressLive').value.trim(),
+    addressReg:      document.getElementById('f_addressReg').value.trim(),
+    passportSeries:  document.getElementById('f_passportSeries').value.trim(),
+    passportNumber:  document.getElementById('f_passportNumber').value.trim(),
+    detentionDate:   document.getElementById('f_detentionDate').value,
+    detentionTime:   document.getElementById('f_detentionTime').value,
+    detentionPlace:  document.getElementById('f_detentionPlace').value.trim(),
+    height:          document.getElementById('f_height').value,
+    build:           document.getElementById('f_build').value,
+    appearance:      document.getElementById('f_appearance').value.trim(),
+    clothes:         document.getElementById('f_clothes').value.trim(),
+    marks:           document.getElementById('f_marks').value.trim(),
+    createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
+    createdBy:       auth.currentUser.email,
+    searchIndex:     makeSearchIndex(lastName, firstName, document.getElementById('f_midName').value.trim(),
+                       document.getElementById('f_passportSeries').value.trim(),
+                       document.getElementById('f_passportNumber').value.trim(),
+                       document.getElementById('f_detentionPlace').value.trim(),
+                       document.getElementById('f_addressLive').value.trim())
+  };
+
+  try {
+    await db.collection('records').add(rec);
+    showToast('✅ Запись сохранена!', 'success');
+    clearForm();
+    allRecordsCache = [];
+  } catch(e) {
+    showToast('Ошибка сохранения: ' + e.message, 'error');
+  }
+}
+
+function makeSearchIndex(...parts) {
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
+function clearForm() {
+  ['f_lastName','f_firstName','f_midName','f_dob','f_age','f_birthplace',
+   'f_addressLive','f_addressReg','f_passportSeries','f_passportNumber',
+   'f_detentionDate','f_detentionTime','f_detentionPlace','f_height',
+   'f_appearance','f_clothes','f_marks'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('f_build').value = '';
+}
+
+// ===== LOAD ALL =====
+async function loadAll() {
+  const container = document.getElementById('allRecords');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div> Загрузка...</div>';
+  try {
+    const snap = await db.collection('records').orderBy('createdAt', 'desc').get();
+    allRecordsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderRecords(allRecordsCache, container);
+  } catch(e) {
+    container.innerHTML = '<div class="loading">Ошибка загрузки: ' + e.message + '</div>';
+  }
+}
+
+// ===== SEARCH =====
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const container = document.getElementById('searchResults');
+  if (!q) { container.innerHTML = ''; return; }
+
+  container.innerHTML = '<div class="loading"><div class="spinner"></div> Поиск...</div>';
+
+  try {
+    let records = allRecordsCache;
+    if (!records.length) {
+      const snap = await db.collection('records').get();
+      records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      allRecordsCache = records;
+    }
+
+    const results = records.filter(r => {
+      const f = currentFilter;
+      const name = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ').toLowerCase();
+      const passport = ((r.passportSeries || '') + ' ' + (r.passportNumber || '')).toLowerCase();
+      const detention = (r.detentionPlace || '').toLowerCase() + ' ' + (r.detentionDate || '');
+      const address = ((r.addressLive || '') + ' ' + (r.addressReg || '')).toLowerCase();
+
+      if (f === 'name')      return name.includes(q);
+      if (f === 'passport')  return passport.includes(q);
+      if (f === 'detention') return detention.includes(q);
+      if (f === 'address')   return address.includes(q);
+      // all
+      return (r.searchIndex || '').includes(q) || name.includes(q) || passport.includes(q) || detention.includes(q);
+    });
+
+    renderRecords(results, container, q);
+  } catch(e) {
+    container.innerHTML = '<div class="loading">Ошибка: ' + e.message + '</div>';
+  }
+}
+
+// ===== RENDER =====
+function renderRecords(records, container, highlight) {
+  if (!records.length) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🔎</div><p>Записи не найдены</p></div>';
+    return;
+  }
+
+  const count = `<div class="results-count">Найдено: <strong>${records.length}</strong></div>`;
+  const cards = records.map(r => {
+    const name = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ');
+    const passport = r.passportSeries && r.passportNumber ? `${r.passportSeries} ${r.passportNumber}` : '';
+    const detained = r.detentionDate ? `${r.detentionDate}${r.detentionTime ? ' '+r.detentionTime : ''}` : '';
+
+    return `<div class="record-card" onclick="showDetail('${r.id}')">
+      <div class="name">${hl(name, highlight)}</div>
+      ${r.dob ? `<div style="font-size:13px;color:var(--text2)">ДР: ${r.dob}${r.age ? ', '+r.age+' лет' : ''}</div>` : ''}
+      <div class="meta">
+        ${passport ? `<span class="tag blue">📄 ${hl(passport, highlight)}</span>` : ''}
+        ${detained ? `<span class="tag purple">🚔 ${detained}</span>` : ''}
+        ${r.detentionPlace ? `<span class="tag">📍 ${hl(r.detentionPlace, highlight)}</span>` : ''}
+        ${r.height ? `<span class="tag green">📏 ${r.height} см</span>` : ''}
+        ${r.build ? `<span class="tag">${r.build}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = count + cards;
+}
+
+function hl(text, q) {
+  if (!q || !text) return text || '';
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return text.replace(re, '<mark style="background:rgba(79,142,247,0.3);border-radius:3px;padding:0 2px">$1</mark>');
+}
+
+// ===== DETAIL MODAL =====
+function showDetail(id) {
+  const r = allRecordsCache.find(x => x.id === id);
+  if (!r) return;
+
+  const name = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ');
+
+  const rows = (label, val) => val ? `<div class="detail-row"><div class="detail-key">${label}</div><div class="detail-val">${val}</div></div>` : '';
+
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-name">${name}</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:4px">ID: ${id}</div>
+
+    <div class="detail-section">
+      <div class="group-label">👤 Личные данные</div>
+      ${rows('Фамилия', r.lastName)}
+      ${rows('Имя', r.firstName)}
+      ${rows('Отчество', r.midName)}
+      ${rows('Дата рождения', r.dob)}
+      ${rows('Возраст', r.age ? r.age + ' лет' : '')}
+      ${rows('Место рождения', r.birthplace)}
+    </div>
+
+    <div class="detail-section">
+      <div class="group-label">🏠 Адреса</div>
+      ${rows('Проживание', r.addressLive)}
+      ${rows('Прописка', r.addressReg)}
+    </div>
+
+    <div class="detail-section">
+      <div class="group-label">📄 Документы</div>
+      ${rows('Серия', r.passportSeries)}
+      ${rows('Номер', r.passportNumber)}
+    </div>
+
+    <div class="detail-section">
+      <div class="group-label">🚔 Задержание</div>
+      ${rows('Дата', r.detentionDate)}
+      ${rows('Время', r.detentionTime)}
+      ${rows('Место', r.detentionPlace)}
+    </div>
+
+    <div class="detail-section">
+      <div class="group-label">🧍 Внешность</div>
+      ${rows('Рост', r.height ? r.height + ' см' : '')}
+      ${rows('Телосложение', r.build)}
+      ${rows('Описание', r.appearance)}
+      ${rows('Одежда', r.clothes)}
+      ${rows('Особые приметы', r.marks)}
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="deleteRecord('${id}')">🗑️ Удалить</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Закрыть</button>
+    </div>
+  `;
+
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modalOverlay')) {
+    document.getElementById('modalOverlay').classList.remove('open');
+  }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Удалить запись? Это действие нельзя отменить.')) return;
+  try {
+    await db.collection('records').doc(id).delete();
+    allRecordsCache = allRecordsCache.filter(r => r.id !== id);
+    closeModal();
+    showToast('🗑️ Запись удалена', 'success');
+    loadAll();
+  } catch(e) {
+    showToast('Ошибка удаления: ' + e.message, 'error');
+  }
+}
+
+// ===== TOAST =====
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + (type || '');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// Enter key on login
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') doLogin();
+});
+
+// Enter key on search
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.activeElement === document.getElementById('searchInput')) doSearch();
+});
+</script>
+</body>
+</html>
