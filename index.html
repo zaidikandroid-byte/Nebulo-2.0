@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Банк данных УБК ГУ МВД России по Краснодарскому краю</title>
 
-  <!-- Firebase SDK (compat версия — проще для использования) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -850,22 +847,13 @@
 
 <script>
 // =============================================
-// ⚙️  ЗАМЕНИТЕ НА ВАШИ ДАННЫЕ ИЗ FIREBASE
+// ⚙️ ДАННЫЕ ИЗ SUPABASE
 // =============================================
-const firebaseConfig = {
-  apiKey:            "AIzaSyCEuooTRUnlMklsfRaGW-UVHf53jV5OO1s",
-  authDomain:        "nebulo-d1c00.firebaseapp.com",
-  projectId:         "nebulo-d1c00",
-  storageBucket:     "nebulo-d1c00.firebasestorage.app",
-  messagingSenderId: "788159983951",
-  appId:             "1:788159983951:web:7e922aa6e00dfe31d5553a"
-};
+const SUPABASE_URL  = 'https://qudswecehldejjnrohvj.supabase.co';
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF1ZHN3ZWNlaGxkZWpqbnJvaHZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MDU5NzcsImV4cCI6MjA5NTE4MTk3N30.cTJzWa1SebH8CG_XvtuMQ3GBmsoYJ10ZOM8p-PUDLco';
 // =============================================
 
-firebase.initializeApp(firebaseConfig);
-const auth    = firebase.auth();
-const db      = firebase.firestore();
-const storage = firebase.storage();
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentFilter  = 'all';
 let allRecordsCache = [];
@@ -874,11 +862,11 @@ let lightboxPhotos  = [];   // URL[] — для лайтбокса
 let lightboxIndex   = 0;
 
 // ===== AUTH =====
-auth.onAuthStateChanged(user => {
-  if (user) {
+sb.auth.onAuthStateChange((event, session) => {
+  if (session) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
-    document.getElementById('userEmail').textContent = user.email;
+    document.getElementById('userEmail').textContent = session.user.email;
     loadAll();
   } else {
     document.getElementById('loginScreen').style.display = 'flex';
@@ -891,19 +879,18 @@ async function doLogin() {
   const pass  = document.getElementById('loginPassword').value;
   const errEl = document.getElementById('loginError');
   errEl.classList.remove('show');
-  try {
-    await auth.signInWithEmailAndPassword(email, pass);
-  } catch(e) {
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) {
     let msg = 'Ошибка входа';
-    if (e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') msg = 'Неверный email или пароль';
-    if (e.code === 'auth/too-many-requests') msg = 'Слишком много попыток. Попробуйте позже';
+    if (error.message.includes('Invalid login') || error.message.includes('invalid')) msg = 'Неверный email или пароль';
+    if (error.message.includes('rate')) msg = 'Слишком много попыток. Попробуйте позже';
     errEl.textContent = msg;
     errEl.classList.add('show');
   }
 }
 
 async function doLogout() {
-  await auth.signOut();
+  await sb.auth.signOut();
 }
 
 // ===== TABS =====
@@ -964,10 +951,12 @@ async function uploadPhotos(docId) {
     const file = selectedPhotos[i];
     progressEl.textContent = `Загрузка фото ${i + 1} из ${selectedPhotos.length}…`;
     const ext  = file.name.split('.').pop();
-    const ref  = storage.ref(`photos/${docId}/${Date.now()}_${i}.${ext}`);
-    const snap = await ref.put(file);
-    const url  = await snap.ref.getDownloadURL();
-    urls.push(url);
+    const path = `${docId}/${Date.now()}_${i}.${ext}`;
+    const { error } = await sb.storage.from('photos').upload(path, file);
+    if (!error) {
+      const { data } = sb.storage.from('photos').getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
   }
   progressEl.style.display = 'none';
   return urls;
@@ -979,29 +968,31 @@ async function saveRecord() {
   const firstName = document.getElementById('f_firstName').value.trim();
   if (!lastName || !firstName) { showToast('Фамилия и Имя обязательны', 'error'); return; }
 
+  const { data: { user } } = await sb.auth.getUser();
+
   const rec = {
-    lastName:        lastName,
-    firstName:       firstName,
-    midName:         document.getElementById('f_midName').value.trim(),
-    dob:             document.getElementById('f_dob').value,
-    age:             document.getElementById('f_age').value,
+    last_name:       lastName,
+    first_name:      firstName,
+    mid_name:        document.getElementById('f_midName').value.trim(),
+    dob:             document.getElementById('f_dob').value || null,
+    age:             document.getElementById('f_age').value || null,
     birthplace:      document.getElementById('f_birthplace').value.trim(),
-    addressLive:     document.getElementById('f_addressLive').value.trim(),
-    addressReg:      document.getElementById('f_addressReg').value.trim(),
-    passportSeries:  document.getElementById('f_passportSeries').value.trim(),
-    passportNumber:  document.getElementById('f_passportNumber').value.trim(),
-    detentionDate:   document.getElementById('f_detentionDate').value,
-    detentionTime:   document.getElementById('f_detentionTime').value,
-    detentionPlace:  document.getElementById('f_detentionPlace').value.trim(),
-    height:          document.getElementById('f_height').value,
-    build:           document.getElementById('f_build').value,
+    address_live:    document.getElementById('f_addressLive').value.trim(),
+    address_reg:     document.getElementById('f_addressReg').value.trim(),
+    passport_series: document.getElementById('f_passportSeries').value.trim(),
+    passport_number: document.getElementById('f_passportNumber').value.trim(),
+    detention_date:  document.getElementById('f_detentionDate').value || null,
+    detention_time:  document.getElementById('f_detentionTime').value || null,
+    detention_place: document.getElementById('f_detentionPlace').value.trim(),
+    height:          document.getElementById('f_height').value || null,
+    build:           document.getElementById('f_build').value || null,
     appearance:      document.getElementById('f_appearance').value.trim(),
     clothes:         document.getElementById('f_clothes').value.trim(),
     marks:           document.getElementById('f_marks').value.trim(),
     photos:          [],
-    createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
-    createdBy:       auth.currentUser.email,
-    searchIndex:     makeSearchIndex(lastName, firstName, document.getElementById('f_midName').value.trim(),
+    created_by:      user.email,
+    search_index:    makeSearchIndex(lastName, firstName,
+                       document.getElementById('f_midName').value.trim(),
                        document.getElementById('f_passportSeries').value.trim(),
                        document.getElementById('f_passportNumber').value.trim(),
                        document.getElementById('f_detentionPlace').value.trim(),
@@ -1009,12 +1000,15 @@ async function saveRecord() {
   };
 
   try {
-    const docRef = await db.collection('records').add(rec);
-    // upload photos if any
+    const { data, error } = await sb.from('records').insert([rec]).select().single();
+    if (error) throw error;
+
     if (selectedPhotos.length) {
-      const urls = await uploadPhotos(docRef.id);
-      await docRef.update({ photos: urls });
+      const urls = await uploadPhotos(data.id);
+      const { error: upErr } = await sb.from('records').update({ photos: urls }).eq('id', data.id);
+      if (upErr) throw upErr;
     }
+
     showToast('✅ Запись сохранена!', 'success');
     clearForm();
     allRecordsCache = [];
@@ -1041,13 +1035,43 @@ function clearForm() {
   renderPhotoPreview();
 }
 
+// ===== NORMALIZE (snake_case → camelCase) =====
+function normalizeRecord(r) {
+  return {
+    id:             r.id,
+    lastName:       r.last_name,
+    firstName:      r.first_name,
+    midName:        r.mid_name,
+    dob:            r.dob,
+    age:            r.age,
+    birthplace:     r.birthplace,
+    addressLive:    r.address_live,
+    addressReg:     r.address_reg,
+    passportSeries: r.passport_series,
+    passportNumber: r.passport_number,
+    detentionDate:  r.detention_date,
+    detentionTime:  r.detention_time,
+    detentionPlace: r.detention_place,
+    height:         r.height,
+    build:          r.build,
+    appearance:     r.appearance,
+    clothes:        r.clothes,
+    marks:          r.marks,
+    photos:         r.photos || [],
+    createdAt:      r.created_at,
+    createdBy:      r.created_by,
+    searchIndex:    r.search_index,
+  };
+}
+
 // ===== LOAD ALL =====
 async function loadAll() {
   const container = document.getElementById('allRecords');
   container.innerHTML = '<div class="loading"><div class="spinner"></div> Загрузка...</div>';
   try {
-    const snap = await db.collection('records').orderBy('createdAt', 'desc').get();
-    allRecordsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const { data, error } = await sb.from('records').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    allRecordsCache = (data || []).map(normalizeRecord);
     renderRecords(allRecordsCache, container);
   } catch(e) {
     container.innerHTML = '<div class="loading">Ошибка загрузки: ' + e.message + '</div>';
@@ -1071,23 +1095,22 @@ async function doSearch() {
   try {
     let records = allRecordsCache;
     if (!records.length) {
-      const snap = await db.collection('records').get();
-      records = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const { data } = await sb.from('records').select('*');
+      records = (data || []).map(normalizeRecord);
       allRecordsCache = records;
     }
 
     const results = records.filter(r => {
       const f = currentFilter;
-      const name = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ').toLowerCase();
+      const name     = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ').toLowerCase();
       const passport = ((r.passportSeries || '') + ' ' + (r.passportNumber || '')).toLowerCase();
       const detention = (r.detentionPlace || '').toLowerCase() + ' ' + (r.detentionDate || '');
-      const address = ((r.addressLive || '') + ' ' + (r.addressReg || '')).toLowerCase();
+      const address  = ((r.addressLive || '') + ' ' + (r.addressReg || '')).toLowerCase();
 
       if (f === 'name')      return name.includes(q);
       if (f === 'passport')  return passport.includes(q);
       if (f === 'detention') return detention.includes(q);
       if (f === 'address')   return address.includes(q);
-      // all
       return (r.searchIndex || '').includes(q) || name.includes(q) || passport.includes(q) || detention.includes(q);
     });
 
@@ -1244,12 +1267,16 @@ function closeModal(e) {
 async function deleteRecord(id) {
   if (!confirm('Удалить запись? Это действие нельзя отменить.')) return;
   try {
-    // delete photos from Storage
     const rec = allRecordsCache.find(x => x.id === id);
     if (rec && rec.photos && rec.photos.length) {
-      await Promise.allSettled(rec.photos.map(url => storage.refFromURL(url).delete()));
+      const paths = rec.photos.map(url => {
+        const match = url.match(/\/object\/public\/photos\/(.+)$/);
+        return match ? decodeURIComponent(match[1]) : null;
+      }).filter(Boolean);
+      if (paths.length) await sb.storage.from('photos').remove(paths);
     }
-    await db.collection('records').doc(id).delete();
+    const { error } = await sb.from('records').delete().eq('id', id);
+    if (error) throw error;
     allRecordsCache = allRecordsCache.filter(r => r.id !== id);
     closeModal();
     showToast('🗑️ Запись удалена', 'success');
