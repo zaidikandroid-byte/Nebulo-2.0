@@ -9,6 +9,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -472,6 +473,211 @@
     }
 
     .error-msg.show { display: block; }
+
+    /* ======= PHOTO UPLOAD ======= */
+    .photo-upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 20px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: var(--surface2);
+      margin-bottom: 12px;
+    }
+
+    .photo-upload-zone:hover, .photo-upload-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(79,142,247,0.05);
+    }
+
+    .photo-upload-zone .upload-icon { font-size: 28px; margin-bottom: 6px; }
+    .photo-upload-zone .upload-text { font-size: 13px; color: var(--text2); }
+    .photo-upload-zone .upload-sub { font-size: 11px; color: var(--text2); opacity: 0.6; margin-top: 4px; }
+
+    .photo-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .photo-preview-item {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .photo-preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .photo-preview-item .remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: none;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .photo-preview-item .photo-num {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    /* ======= CARD THUMBNAIL ======= */
+    .card-with-photo {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .card-thumb {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+
+    .card-thumb-placeholder {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .card-body { flex: 1; min-width: 0; }
+
+    /* ======= MODAL PHOTO GALLERY ======= */
+    .modal-photo-gallery {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .modal-photo-gallery img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .modal-photo-gallery img:hover { opacity: 0.85; }
+
+    .photo-count-badge {
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 12px;
+    }
+
+    /* ======= LIGHTBOX ======= */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox.open { display: flex; }
+
+    .lightbox img {
+      max-width: 95vw;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      font-size: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.15);
+      border: none;
+      color: #fff;
+      font-size: 22px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .lightbox-nav.prev { left: 12px; }
+    .lightbox-nav.next { right: 12px; }
+
+    .lightbox-counter {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      font-size: 13px;
+      padding: 4px 14px;
+      border-radius: 20px;
+    }
+
+    .upload-progress {
+      font-size: 13px;
+      color: var(--accent);
+      text-align: center;
+      padding: 8px 0;
+    }
   </style>
 </head>
 <body>
@@ -577,6 +783,17 @@
     <div class="field"><label>Одежда</label><textarea id="f_clothes" placeholder="Синяя куртка, чёрные джинсы..."></textarea></div>
     <div class="field"><label>Особые приметы</label><textarea id="f_marks" placeholder="Татуировки, шрамы, родимые пятна..."></textarea></div>
 
+    <div class="group-label">📷 Фотографии</div>
+    <div id="photoPreviewGrid" class="photo-preview-grid" style="display:none"></div>
+    <div class="photo-upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()"
+         ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+      <div class="upload-icon">📷</div>
+      <div class="upload-text">Нажмите или перетащите фото</div>
+      <div class="upload-sub">До 10 фотографий · JPG, PNG, HEIC</div>
+    </div>
+    <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="addPhotos(this.files)">
+    <div id="uploadProgress" class="upload-progress" style="display:none"></div>
+
     <button class="btn btn-primary" onclick="saveRecord()" style="margin-top:8px">💾 Сохранить запись</button>
   </div>
 
@@ -619,6 +836,15 @@
   </div>
 </div>
 
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button class="lightbox-nav prev" onclick="lightboxNav(-1, event)">‹</button>
+  <img id="lightboxImg" src="" alt="">
+  <button class="lightbox-nav next" onclick="lightboxNav(1, event)">›</button>
+  <div class="lightbox-counter" id="lightboxCounter"></div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -637,11 +863,15 @@ const firebaseConfig = {
 // =============================================
 
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.firestore();
+const auth    = firebase.auth();
+const db      = firebase.firestore();
+const storage = firebase.storage();
 
-let currentFilter = 'all';
+let currentFilter  = 'all';
 let allRecordsCache = [];
+let selectedPhotos  = [];   // File[] — выбранные фото до сохранения
+let lightboxPhotos  = [];   // URL[] — для лайтбокса
+let lightboxIndex   = 0;
 
 // ===== AUTH =====
 auth.onAuthStateChanged(user => {
@@ -686,6 +916,63 @@ function switchTab(name) {
   if (name === 'list') loadAll();
 }
 
+// ===== PHOTO HANDLING =====
+function addPhotos(files) {
+  const arr = Array.from(files);
+  const remaining = 10 - selectedPhotos.length;
+  if (remaining <= 0) { showToast('Максимум 10 фото', 'error'); return; }
+  const toAdd = arr.slice(0, remaining);
+  selectedPhotos = selectedPhotos.concat(toAdd);
+  renderPhotoPreview();
+  // reset input so same file can be re-selected
+  document.getElementById('photoInput').value = '';
+}
+
+function removePhoto(idx) {
+  selectedPhotos.splice(idx, 1);
+  renderPhotoPreview();
+}
+
+function renderPhotoPreview() {
+  const grid = document.getElementById('photoPreviewGrid');
+  if (!selectedPhotos.length) { grid.style.display = 'none'; grid.innerHTML = ''; return; }
+  grid.style.display = 'grid';
+  grid.innerHTML = selectedPhotos.map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return `<div class="photo-preview-item">
+      <img src="${url}" alt="Фото ${i+1}">
+      <button class="remove-btn" onclick="removePhoto(${i})">✕</button>
+      <span class="photo-num">${i+1}</span>
+    </div>`;
+  }).join('');
+}
+
+function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
+function onDragLeave()  { document.getElementById('uploadZone').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadZone').classList.remove('dragover');
+  addPhotos(e.dataTransfer.files);
+}
+
+async function uploadPhotos(docId) {
+  if (!selectedPhotos.length) return [];
+  const progressEl = document.getElementById('uploadProgress');
+  progressEl.style.display = 'block';
+  const urls = [];
+  for (let i = 0; i < selectedPhotos.length; i++) {
+    const file = selectedPhotos[i];
+    progressEl.textContent = `Загрузка фото ${i + 1} из ${selectedPhotos.length}…`;
+    const ext  = file.name.split('.').pop();
+    const ref  = storage.ref(`photos/${docId}/${Date.now()}_${i}.${ext}`);
+    const snap = await ref.put(file);
+    const url  = await snap.ref.getDownloadURL();
+    urls.push(url);
+  }
+  progressEl.style.display = 'none';
+  return urls;
+}
+
 // ===== SAVE RECORD =====
 async function saveRecord() {
   const lastName  = document.getElementById('f_lastName').value.trim();
@@ -711,6 +998,7 @@ async function saveRecord() {
     appearance:      document.getElementById('f_appearance').value.trim(),
     clothes:         document.getElementById('f_clothes').value.trim(),
     marks:           document.getElementById('f_marks').value.trim(),
+    photos:          [],
     createdAt:       firebase.firestore.FieldValue.serverTimestamp(),
     createdBy:       auth.currentUser.email,
     searchIndex:     makeSearchIndex(lastName, firstName, document.getElementById('f_midName').value.trim(),
@@ -721,12 +1009,18 @@ async function saveRecord() {
   };
 
   try {
-    await db.collection('records').add(rec);
+    const docRef = await db.collection('records').add(rec);
+    // upload photos if any
+    if (selectedPhotos.length) {
+      const urls = await uploadPhotos(docRef.id);
+      await docRef.update({ photos: urls });
+    }
     showToast('✅ Запись сохранена!', 'success');
     clearForm();
     allRecordsCache = [];
   } catch(e) {
     showToast('Ошибка сохранения: ' + e.message, 'error');
+    document.getElementById('uploadProgress').style.display = 'none';
   }
 }
 
@@ -743,6 +1037,8 @@ function clearForm() {
     if (el) el.value = '';
   });
   document.getElementById('f_build').value = '';
+  selectedPhotos = [];
+  renderPhotoPreview();
 }
 
 // ===== LOAD ALL =====
@@ -810,19 +1106,30 @@ function renderRecords(records, container, highlight) {
 
   const count = `<div class="results-count">Найдено: <strong>${records.length}</strong></div>`;
   const cards = records.map(r => {
-    const name = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ');
+    const name     = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ');
     const passport = r.passportSeries && r.passportNumber ? `${r.passportSeries} ${r.passportNumber}` : '';
     const detained = r.detentionDate ? `${r.detentionDate}${r.detentionTime ? ' '+r.detentionTime : ''}` : '';
+    const photos   = r.photos && r.photos.length ? r.photos : [];
+
+    const thumbHtml = photos.length
+      ? `<img class="card-thumb" src="${photos[0]}" alt="Фото" loading="lazy">`
+      : `<div class="card-thumb-placeholder">👤</div>`;
 
     return `<div class="record-card" onclick="showDetail('${r.id}')">
-      <div class="name">${hl(name, highlight)}</div>
-      ${r.dob ? `<div style="font-size:13px;color:var(--text2)">ДР: ${r.dob}${r.age ? ', '+r.age+' лет' : ''}</div>` : ''}
-      <div class="meta">
-        ${passport ? `<span class="tag blue">📄 ${hl(passport, highlight)}</span>` : ''}
-        ${detained ? `<span class="tag purple">🚔 ${detained}</span>` : ''}
-        ${r.detentionPlace ? `<span class="tag">📍 ${hl(r.detentionPlace, highlight)}</span>` : ''}
-        ${r.height ? `<span class="tag green">📏 ${r.height} см</span>` : ''}
-        ${r.build ? `<span class="tag">${r.build}</span>` : ''}
+      <div class="card-with-photo">
+        ${thumbHtml}
+        <div class="card-body">
+          <div class="name">${hl(name, highlight)}</div>
+          ${r.dob ? `<div style="font-size:13px;color:var(--text2)">ДР: ${r.dob}${r.age ? ', '+r.age+' лет' : ''}</div>` : ''}
+          <div class="meta">
+            ${passport ? `<span class="tag blue">📄 ${hl(passport, highlight)}</span>` : ''}
+            ${detained ? `<span class="tag purple">🚔 ${detained}</span>` : ''}
+            ${r.detentionPlace ? `<span class="tag">📍 ${hl(r.detentionPlace, highlight)}</span>` : ''}
+            ${r.height ? `<span class="tag green">📏 ${r.height} см</span>` : ''}
+            ${r.build ? `<span class="tag">${r.build}</span>` : ''}
+            ${photos.length > 1 ? `<span class="tag blue">📷 ${photos.length} фото</span>` : photos.length === 1 ? `<span class="tag blue">📷 1 фото</span>` : ''}
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -841,13 +1148,25 @@ function showDetail(id) {
   const r = allRecordsCache.find(x => x.id === id);
   if (!r) return;
 
-  const name = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ');
+  const name   = [r.lastName, r.firstName, r.midName].filter(Boolean).join(' ');
+  const photos = r.photos && r.photos.length ? r.photos : [];
 
   const rows = (label, val) => val ? `<div class="detail-row"><div class="detail-key">${label}</div><div class="detail-val">${val}</div></div>` : '';
+
+  const galleryHtml = photos.length ? `
+    <div class="detail-section">
+      <div class="group-label">📷 Фотографии</div>
+      <div class="photo-count-badge">${photos.length} ${photos.length === 1 ? 'фотография' : photos.length < 5 ? 'фотографии' : 'фотографий'}</div>
+      <div class="modal-photo-gallery">
+        ${photos.map((url, i) => `<img src="${url}" alt="Фото ${i+1}" loading="lazy" onclick="openLightbox(${JSON.stringify(photos)}, ${i})">`).join('')}
+      </div>
+    </div>` : '';
 
   document.getElementById('modalBody').innerHTML = `
     <div class="modal-name">${name}</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:4px">ID: ${id}</div>
+
+    ${galleryHtml}
 
     <div class="detail-section">
       <div class="group-label">👤 Личные данные</div>
@@ -896,6 +1215,26 @@ function showDetail(id) {
   document.getElementById('modalOverlay').classList.add('open');
 }
 
+// ===== LIGHTBOX =====
+function openLightbox(photos, index) {
+  lightboxPhotos = photos;
+  lightboxIndex  = index;
+  document.getElementById('lightboxImg').src = photos[index];
+  document.getElementById('lightboxCounter').textContent = `${index + 1} / ${photos.length}`;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+function lightboxNav(dir, e) {
+  e.stopPropagation();
+  lightboxIndex = (lightboxIndex + dir + lightboxPhotos.length) % lightboxPhotos.length;
+  document.getElementById('lightboxImg').src = lightboxPhotos[lightboxIndex];
+  document.getElementById('lightboxCounter').textContent = `${lightboxIndex + 1} / ${lightboxPhotos.length}`;
+}
+
 function closeModal(e) {
   if (!e || e.target === document.getElementById('modalOverlay')) {
     document.getElementById('modalOverlay').classList.remove('open');
@@ -905,6 +1244,11 @@ function closeModal(e) {
 async function deleteRecord(id) {
   if (!confirm('Удалить запись? Это действие нельзя отменить.')) return;
   try {
+    // delete photos from Storage
+    const rec = allRecordsCache.find(x => x.id === id);
+    if (rec && rec.photos && rec.photos.length) {
+      await Promise.allSettled(rec.photos.map(url => storage.refFromURL(url).delete()));
+    }
     await db.collection('records').doc(id).delete();
     allRecordsCache = allRecordsCache.filter(r => r.id !== id);
     closeModal();
