@@ -324,7 +324,7 @@
 
     <div class="group-label">📷 Фотографии</div>
     <div id="photoPreviewGrid" class="photo-preview-grid" style="display:none"></div>
-    <div class="photo-upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()"
+    <div class="photo-upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click(); startPhotoPolling();"
          ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
       <div class="upload-icon">📷</div>
       <div class="upload-text">Нажмите или перетащите фото</div>
@@ -400,31 +400,17 @@ let selectedPhotos  = [];
 let lightboxPhotos  = [];
 let lightboxIndex   = 0;
 
-// ===== ANDROID PHOTO BRIDGE =====
-function onAndroidPhotosReady() {
-  try {
-    const bridge = window.AndroidBridge;
-    if (!bridge) { showToast('Мост не найден', 'error'); return; }
-    const count = bridge.getPhotoCount();
-    if (!count) { showToast('Фото не получены', 'error'); return; }
-    for (let i = 0; i < count; i++) {
-      const b64 = bridge.getPhoto(i);
-      if (!b64) continue;
-      const byteString = atob(b64);
-      const ab = new ArrayBuffer(byteString.length);
-      const ia = new Uint8Array(ab);
-      for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
-      const blob = new Blob([ab], { type: 'image/jpeg' });
-      const file = new File([blob], 'photo_' + Date.now() + '_' + i + '.jpg', { type: 'image/jpeg' });
-      if (selectedPhotos.length < 10) selectedPhotos.push(file);
-    }
-    bridge.clearPhotos();
-    renderPhotoPreview();
-    showToast('📷 Добавлено фото: ' + count, 'success');
-  } catch(e) {
-    showToast('Ошибка: ' + e.message, 'error');
-  }
+// ===== ANDROID PHOTO BRIDGE (polling) =====
+let photoPollingTimer = null;
+
+function startPhotoPolling() {
+  showToast('Polling запущен', 'success');
+  const bridge = window.AndroidBridge;
+  if (!bridge) { showToast('AndroidBridge отсутствует', 'error'); return; }
+  showToast('AndroidBridge найден', 'success');
 }
+
+function onAndroidPhotosReady() {} // оставляем для совместимости
 
 // ===== AUTH =====
 sb.auth.onAuthStateChange((event, session) => {
@@ -516,12 +502,16 @@ function collectEpisodes() {
 
 // ===== PHOTO HANDLING =====
 function addPhotos(files) {
-  const arr = Array.from(files);
-  if (!arr.length) return;
-  const remaining = 10 - selectedPhotos.length;
-  if (remaining <= 0) { showToast('Максимум 10 фото', 'error'); return; }
-  selectedPhotos = selectedPhotos.concat(arr.slice(0, remaining));
-  renderPhotoPreview();
+  // Для веб-версии — конвертируем File в base64
+  Array.from(files).forEach(file => {
+    if (selectedPhotos.length >= 10) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const b64 = e.target.result.split(',')[1];
+      if (b64) { selectedPhotos.push(b64); renderPhotoPreview(); }
+    };
+    reader.readAsDataURL(file);
+  });
   document.getElementById('photoInput').value = '';
 }
 
@@ -531,20 +521,12 @@ function renderPhotoPreview() {
   const grid = document.getElementById('photoPreviewGrid');
   if (!selectedPhotos.length) { grid.style.display = 'none'; grid.innerHTML = ''; return; }
   grid.style.display = 'grid';
-  grid.innerHTML = '';
-  selectedPhotos.forEach((f, i) => {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const div = document.createElement('div');
-      div.className = 'photo-preview-item';
-      div.innerHTML = `
-        <img src="${e.target.result}" alt="Фото ${i+1}">
-        <button class="remove-btn" onclick="removePhoto(${i})">✕</button>
-        <span class="photo-num">${i+1}</span>`;
-      grid.appendChild(div);
-    };
-    reader.readAsDataURL(f);
-  });
+  grid.innerHTML = selectedPhotos.map((b64, i) => `
+    <div class="photo-preview-item">
+      <img src="data:image/jpeg;base64,${b64}" alt="Фото ${i+1}">
+      <button class="remove-btn" onclick="removePhoto(${i})">✕</button>
+      <span class="photo-num">${i+1}</span>
+    </div>`).join('');
 }
 
 function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
@@ -557,15 +539,20 @@ async function uploadPhotos(docId) {
   progressEl.style.display = 'block';
   const urls = [];
   for (let i = 0; i < selectedPhotos.length; i++) {
-    const file = selectedPhotos[i];
     progressEl.textContent = `Загрузка фото ${i + 1} из ${selectedPhotos.length}…`;
-    const ext  = file.name.split('.').pop();
-    const path = `${docId}/${Date.now()}_${i}.${ext}`;
-    const { error } = await sb.storage.from('photos').upload(path, file);
-    if (!error) {
-      const { data } = sb.storage.from('photos').getPublicUrl(path);
-      urls.push(data.publicUrl);
-    }
+    try {
+      const byteString = atob(selectedPhotos[i]);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
+      const blob = new Blob([ab], { type: 'image/jpeg' });
+      const path = `${docId}/${Date.now()}_${i}.jpg`;
+      const { error } = await sb.storage.from('photos').upload(path, blob, { contentType: 'image/jpeg' });
+      if (!error) {
+        const { data } = sb.storage.from('photos').getPublicUrl(path);
+        urls.push(data.publicUrl);
+      }
+    } catch(e) { /* пропускаем проблемное фото */ }
   }
   progressEl.style.display = 'none';
   return urls;
