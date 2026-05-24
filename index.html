@@ -330,7 +330,7 @@
       <div class="upload-text">Нажмите или перетащите фото</div>
       <div class="upload-sub">До 10 фотографий · JPG, PNG, HEIC</div>
     </div>
-    <input type="file" id="photoInput" accept="image/*" multiple style="display:none" onchange="addPhotos(this.files)">
+    <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
     <div id="uploadProgress" class="upload-progress" style="display:none"></div>
 
     <button class="btn btn-primary" onclick="saveRecord()" style="margin-top:8px">💾 Сохранить запись</button>
@@ -399,6 +399,32 @@ let allRecordsCache = [];
 let selectedPhotos  = [];
 let lightboxPhotos  = [];
 let lightboxIndex   = 0;
+
+// ===== ANDROID PHOTO BRIDGE =====
+function onAndroidPhotosReady() {
+  try {
+    const bridge = window.AndroidBridge;
+    if (!bridge) { showToast('Мост не найден', 'error'); return; }
+    const count = bridge.getPhotoCount();
+    if (!count) { showToast('Фото не получены', 'error'); return; }
+    for (let i = 0; i < count; i++) {
+      const b64 = bridge.getPhoto(i);
+      if (!b64) continue;
+      const byteString = atob(b64);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let j = 0; j < byteString.length; j++) ia[j] = byteString.charCodeAt(j);
+      const blob = new Blob([ab], { type: 'image/jpeg' });
+      const file = new File([blob], 'photo_' + Date.now() + '_' + i + '.jpg', { type: 'image/jpeg' });
+      if (selectedPhotos.length < 10) selectedPhotos.push(file);
+    }
+    bridge.clearPhotos();
+    renderPhotoPreview();
+    showToast('📷 Добавлено фото: ' + count, 'success');
+  } catch(e) {
+    showToast('Ошибка: ' + e.message, 'error');
+  }
+}
 
 // ===== AUTH =====
 sb.auth.onAuthStateChange((event, session) => {
@@ -491,6 +517,7 @@ function collectEpisodes() {
 // ===== PHOTO HANDLING =====
 function addPhotos(files) {
   const arr = Array.from(files);
+  if (!arr.length) return;
   const remaining = 10 - selectedPhotos.length;
   if (remaining <= 0) { showToast('Максимум 10 фото', 'error'); return; }
   selectedPhotos = selectedPhotos.concat(arr.slice(0, remaining));
@@ -504,14 +531,20 @@ function renderPhotoPreview() {
   const grid = document.getElementById('photoPreviewGrid');
   if (!selectedPhotos.length) { grid.style.display = 'none'; grid.innerHTML = ''; return; }
   grid.style.display = 'grid';
-  grid.innerHTML = selectedPhotos.map((f, i) => {
-    const url = URL.createObjectURL(f);
-    return `<div class="photo-preview-item">
-      <img src="${url}" alt="Фото ${i+1}">
-      <button class="remove-btn" onclick="removePhoto(${i})">✕</button>
-      <span class="photo-num">${i+1}</span>
-    </div>`;
-  }).join('');
+  grid.innerHTML = '';
+  selectedPhotos.forEach((f, i) => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const div = document.createElement('div');
+      div.className = 'photo-preview-item';
+      div.innerHTML = `
+        <img src="${e.target.result}" alt="Фото ${i+1}">
+        <button class="remove-btn" onclick="removePhoto(${i})">✕</button>
+        <span class="photo-num">${i+1}</span>`;
+      grid.appendChild(div);
+    };
+    reader.readAsDataURL(f);
+  });
 }
 
 function onDragOver(e) { e.preventDefault(); document.getElementById('uploadZone').classList.add('dragover'); }
@@ -874,8 +907,26 @@ function closeModal(e) {
 }
 
 // ===== DELETE =====
+function customConfirm(msg) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;display:flex;align-items:center;justify-content:center;padding:24px';
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border-radius:16px;padding:24px;max-width:320px;width:100%;border:1px solid var(--border)">
+        <div style="font-size:16px;font-weight:600;margin-bottom:20px;line-height:1.4">${msg}</div>
+        <div style="display:flex;gap:10px">
+          <button id="confirmYes" class="btn btn-danger" style="flex:1">Удалить</button>
+          <button id="confirmNo" class="btn btn-ghost" style="flex:1">Отмена</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#confirmYes').onclick = () => { document.body.removeChild(overlay); resolve(true); };
+    overlay.querySelector('#confirmNo').onclick  = () => { document.body.removeChild(overlay); resolve(false); };
+  });
+}
 async function deleteRecord(id) {
-  if (!confirm('Удалить запись? Это действие нельзя отменить.')) return;
+  const ok = await customConfirm('Удалить запись? Это действие нельзя отменить.');
+  if (!ok) return;
   try {
     const rec = allRecordsCache.find(x => x.id === id);
     if (rec && rec.photos && rec.photos.length) {
